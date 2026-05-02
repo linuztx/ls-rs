@@ -1,6 +1,5 @@
 use clap::Parser;
 
-
 #[derive(Parser)]
 #[command(name = "ls-rs", about = "A modern ls replacement written in Rust")]
 pub struct Args {
@@ -14,7 +13,6 @@ pub struct Args {
     pub long: bool,
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -27,7 +25,6 @@ mod tests {
         assert!(!args.all);
         assert!(!args.long);
     }
-
 
     #[test]
     fn parse_flags() {
