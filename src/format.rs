@@ -1,17 +1,38 @@
 use chrono::{DateTime, Datelike, Local};
+use terminal_size::{Width, terminal_size};
 
 use crate::color::colorize;
 use crate::entry::FileEntry;
 
+const COLUMN_PADDING: usize = 2;
+
 pub fn short_format(entries: &[FileEntry]) -> String {
-    let mut out = String::new();
-    for (i, entry) in entries.iter().enumerate() {
-        if i > 0 {
-            out.push_str("  ")
-        }
-        out.push_str(&colorize(entry).to_string());
+    if entries.is_empty() {
+        return "\n".to_string();
     }
-    out.push('\n');
+
+    let term_width = terminal_size()
+        .map(|(Width(w), _)| w as usize)
+        .unwrap_or(80);
+
+    let (cols, rows, col_widths) = compute_layout(entries, term_width);
+    let mut out = String::with_capacity(entries.len() * 16);
+
+    for row in 0..rows {
+        for (col, &width) in col_widths.iter().enumerate() {
+            let idx = col * rows + row;
+            if let Some(entry) = entries.get(idx) {
+                out.push_str(&colorize(entry).to_string());
+                if col + 1 < cols {
+                    let pad = width - entry.name.len() + COLUMN_PADDING;
+                    for _ in 0..pad {
+                        out.push(' ');
+                    }
+                }
+            }
+        }
+        out.push('\n');
+    }
     out
 }
 
@@ -55,6 +76,31 @@ pub fn long_format(entries: &[FileEntry]) -> String {
     }
 
     out
+}
+
+fn compute_layout(entries: &[FileEntry], term_width: usize) -> (usize, usize, Vec<usize>) {
+    let n = entries.len();
+
+    for cols in (1..=n).rev() {
+        let rows = n.div_ceil(cols);
+        let mut col_widths = vec![0usize; cols];
+        for (i, entry) in entries.iter().enumerate() {
+            let col = i / rows;
+            col_widths[col] = col_widths[col].max(entry.name.len());
+        }
+        let total: usize = col_widths
+            .iter()
+            .enumerate()
+            .map(|(i, w)| if i + 1 < cols { w + COLUMN_PADDING } else { *w })
+            .sum();
+
+        if total <= term_width {
+            return (cols, rows, col_widths);
+        }
+    }
+
+    let max_w = entries.iter().map(|e| e.name.len()).max().unwrap_or(0);
+    (1, n, vec![max_w])
 }
 
 fn column_widths(rows: &[[String; 7]]) -> [usize; 7] {
