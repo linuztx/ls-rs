@@ -33,6 +33,7 @@ mod tests {
             uid: 0,
             gid: 0,
             modified: SystemTime::UNIX_EPOCH,
+            blocks: 0,
         }
     }
 

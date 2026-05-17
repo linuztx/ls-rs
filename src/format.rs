@@ -55,7 +55,7 @@ pub fn long_format(entries: &[FileEntry]) -> String {
         .collect();
 
     let widths = column_widths(&rows);
-    let total_blocks: u64 = entries.iter().map(|e| blocks_for(e.size)).sum();
+    let total_blocks: u64 = entries.iter().map(|e| e.blocks / 2).sum();
 
     let mut out = format!("total {}\n", total_blocks);
     for row in &rows {
@@ -162,10 +162,6 @@ fn format_time(t: std::time::SystemTime, now: DateTime<Local>) -> String {
     }
 }
 
-fn blocks_for(size: u64) -> u64 {
-    size.div_ceil(1024)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -184,6 +180,7 @@ mod tests {
             uid: 0,
             gid: 0,
             modified: SystemTime::UNIX_EPOCH,
+            blocks: 0,
         }
     }
 
@@ -274,36 +271,6 @@ mod tests {
         assert_eq!(format_time(file, now), "Jan  3 2024");
     }
 
-    #[test]
-    fn blocks_for_zero_size_is_zero() {
-        assert_eq!(blocks_for(0), 0);
-    }
-
-    #[test]
-    fn blocks_for_one_byte_rounds_up_to_one_block() {
-        assert_eq!(blocks_for(1), 1);
-    }
-
-    #[test]
-    fn blocks_for_just_below_block_size_is_one_block() {
-        assert_eq!(blocks_for(1023), 1);
-    }
-
-    #[test]
-    fn blocks_for_exact_block_size_is_one_block() {
-        assert_eq!(blocks_for(1024), 1);
-    }
-
-    #[test]
-    fn blocks_for_just_over_block_size_is_two_blocks() {
-        assert_eq!(blocks_for(1025), 2);
-    }
-
-    #[test]
-    fn blocks_for_exact_two_blocks() {
-        assert_eq!(blocks_for(2048), 2);
-    }
-
     fn sized_entry(name: &str, size: u64) -> FileEntry {
         let mut e = entry(name, "file");
         e.size = size;
@@ -325,13 +292,15 @@ mod tests {
 
     #[test]
     fn long_format_total_line_sums_blocks_across_entries() {
-        let entries = [
-            sized_entry("small.txt", 1),     // 1 block
-            sized_entry("medium.bin", 1025), // 2 blocks
-            sized_entry("big.bin", 4096),    // 4 blocks
-        ];
-        let result = long_format(&entries);
-        assert!(result.starts_with("total 7\n"));
+        // total uses e.blocks / 2 (512-byte units → 1024-byte units)
+        let mut small = sized_entry("small.txt", 1);
+        small.blocks = 2; // 1 KiB block
+        let mut medium = sized_entry("medium.bin", 1025);
+        medium.blocks = 4; // 2 KiB blocks
+        let mut big = sized_entry("big.bin", 4096);
+        big.blocks = 8; // 4 KiB blocks
+        let result = long_format(&[small, medium, big]);
+        assert!(result.starts_with("total 7\n")); // (2+4+8)/2 = 7
     }
 
     #[test]

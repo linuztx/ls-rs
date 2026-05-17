@@ -15,6 +15,7 @@ pub struct FileEntry {
     pub uid: u32,
     pub gid: u32,
     pub modified: SystemTime,
+    pub blocks: u64,
 }
 
 impl FileEntry {
@@ -40,6 +41,7 @@ impl FileEntry {
             uid: metadata.uid(),
             gid: metadata.gid(),
             modified: metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH),
+            blocks: metadata.blocks(),
         })
     }
 }

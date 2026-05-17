@@ -49,6 +49,17 @@ fn collect_entries(path: &Path, show_hidden: bool) -> io::Result<Vec<FileEntry>>
         .filter(|e| show_hidden || !e.is_hidden)
         .collect();
 
+    if show_hidden {
+        if let Ok(mut dot) = FileEntry::from_path(path) {
+            dot.name = ".".to_string();
+            entries.push(dot);
+        }
+        if let Ok(mut dotdot) = FileEntry::from_path(&path.join("..")) {
+            dotdot.name = "..".to_string();
+            entries.push(dotdot);
+        }
+    }
+
     entries.sort_by_key(|e| e.name.to_lowercase());
     Ok(entries)
 }
