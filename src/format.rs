@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::{DateTime, Datelike, Local};
 use terminal_size::{Width, terminal_size};
 
@@ -38,6 +40,8 @@ pub fn short_format(entries: &[FileEntry]) -> String {
 
 pub fn long_format(entries: &[FileEntry]) -> String {
     let now = Local::now();
+    let mut user_cache: HashMap<u32, String> = HashMap::new();
+    let mut group_cache: HashMap<u32, String> = HashMap::new();
 
     let rows: Vec<[String; 7]> = entries
         .iter()
@@ -45,8 +49,8 @@ pub fn long_format(entries: &[FileEntry]) -> String {
             [
                 permissions_string(e),
                 e.nlink.to_string(),
-                user_name(e.uid),
-                group_name(e.gid),
+                user_name(e.uid, &mut user_cache),
+                group_name(e.gid, &mut group_cache),
                 e.size.to_string(),
                 format_time(e.modified, now),
                 colorize(e).to_string(),
@@ -141,16 +145,26 @@ fn permissions_string(entry: &FileEntry) -> String {
     s
 }
 
-fn user_name(uid: u32) -> String {
-    users::get_user_by_uid(uid)
-        .map(|u| u.name().to_string_lossy().into_owned())
-        .unwrap_or_else(|| uid.to_string())
+fn user_name(uid: u32, cache: &mut HashMap<u32, String>) -> String {
+    cache
+        .entry(uid)
+        .or_insert_with(|| {
+            users::get_user_by_uid(uid)
+                .map(|u| u.name().to_string_lossy().into_owned())
+                .unwrap_or_else(|| uid.to_string())
+        })
+        .clone()
 }
 
-fn group_name(gid: u32) -> String {
-    users::get_group_by_gid(gid)
-        .map(|g| g.name().to_string_lossy().into_owned())
-        .unwrap_or_else(|| gid.to_string())
+fn group_name(gid: u32, cache: &mut HashMap<u32, String>) -> String {
+    cache
+        .entry(gid)
+        .or_insert_with(|| {
+            users::get_group_by_gid(gid)
+                .map(|g| g.name().to_string_lossy().into_owned())
+                .unwrap_or_else(|| gid.to_string())
+        })
+        .clone()
 }
 
 fn format_time(t: std::time::SystemTime, now: DateTime<Local>) -> String {
@@ -229,22 +243,35 @@ mod tests {
 
     #[test]
     fn uid_zero_is_root() {
-        assert_eq!(user_name(0), "root");
+        let mut cache = HashMap::new();
+        assert_eq!(user_name(0, &mut cache), "root");
     }
 
     #[test]
     fn gid_zero_is_root() {
-        assert_eq!(group_name(0), "root");
+        let mut cache = HashMap::new();
+        assert_eq!(group_name(0, &mut cache), "root");
     }
 
     #[test]
     fn unknown_uid_falls_back_to_number_string() {
-        assert_eq!(user_name(u32::MAX), u32::MAX.to_string());
+        let mut cache = HashMap::new();
+        assert_eq!(user_name(u32::MAX, &mut cache), u32::MAX.to_string());
     }
 
     #[test]
     fn unknown_gid_falls_back_to_number_string() {
-        assert_eq!(group_name(u32::MAX), u32::MAX.to_string());
+        let mut cache = HashMap::new();
+        assert_eq!(group_name(u32::MAX, &mut cache), u32::MAX.to_string());
+    }
+
+    #[test]
+    fn user_name_cache_returns_same_value_on_repeat_calls() {
+        let mut cache = HashMap::new();
+        let first = user_name(0, &mut cache);
+        let second = user_name(0, &mut cache);
+        assert_eq!(first, second);
+        assert_eq!(cache.len(), 1);
     }
 
     use chrono::TimeZone;
